@@ -1,0 +1,32 @@
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+cvenv/
+env/
+ENV/
+.venv
+
+# Scripts
+cli.py
+
+# Voice agent files
+voice_agent/agent.py
+voice_agent/check_dispatch.py
+voice_agent/example_batch_call.py
+voice_agent/place_outbound_call.py
+voice_agent/test_run_call.py
+
+# Transcripts
+transcripts/
+*.transcript
+transcripts.*
+
+
+
