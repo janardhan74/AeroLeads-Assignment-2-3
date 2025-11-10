@@ -4,6 +4,7 @@ import os
 import datetime
 import time
 import json
+import base64
 from pathlib import Path
 from typing import Optional, Dict, Any
 from dotenv import load_dotenv
@@ -345,6 +346,39 @@ async def make_call_with_transcript(
         
         return result
         
+    except api.TwirpError as e:
+        print(f"[Make Call] TwirpError while creating SIP participant: {e}")
+        metadata = e.metadata or {}
+        decoded_details = metadata.get("error_details")
+        if decoded_details:
+            try:
+                decoded_bytes = base64.b64decode(decoded_details)
+                decoded_details = decoded_bytes.decode("utf-8")
+            except Exception:
+                # Keep original if decoding fails
+                pass
+        call_status = {
+            "outcome": "failed_to_dial",
+            "answered_at": None,
+            "ended_at": _now().isoformat(),
+            "duration_seconds": 0,
+            "last_status": metadata.get("sip_status"),
+            "call_attributes": {
+                "sip_status": metadata.get("sip_status"),
+                "sip_status_code": metadata.get("sip_status_code"),
+                "error_code": e.code,
+                "error_message": e.message,
+                "error_details": decoded_details,
+            },
+        }
+        result = {
+            "phone_number": phone_number,
+            "room_name": room_name,
+            "dispatch_id": dispatch_id,
+            "call_status": call_status,
+            "transcript": None,
+        }
+        return result
     except Exception as e:
         print(f"[Make Call] Error: {e}")
         raise
