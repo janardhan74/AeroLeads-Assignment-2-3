@@ -1,3 +1,4 @@
+# agent_with_transcripts.py
 from dotenv import load_dotenv
 import os, asyncio, json
 from datetime import datetime
@@ -23,14 +24,22 @@ DEEPGRAM_API_KEY    = os.getenv("DEEPGRAM_API_KEY", "")
 TRANSCRIPTS_DIR = Path(os.getenv("TRANSCRIPTS_DIR", "./transcripts"))
 TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
 
+
 class Assistant(Agent):
     def __init__(self) -> None:
+        # Assistant-level guidance (voice style + brand)
         super().__init__(
             instructions=(
-                "You are a concise, friendly voice assistant. "
-                "Keep replies brief and conversational."
+                "You are Aeroleads Agent — a friendly, concise voice assistant. "
+                "You can help with Aeroleads customer questions AND general knowledge queries. "
+                "Keep replies brief, conversational, and easy to speak aloud. "
+                "Prefer direct answers over long explanations. "
+                "If a fact can change (e.g., leaders, prices, schedules), mention that it’s current as of today. "
+                "If you’re unsure, say so rather than guessing. "
+                "For Aeroleads support, be helpful and professional; offer next steps when relevant."
             )
         )
+
 
 async def entrypoint(ctx: agents.JobContext):
     session: AgentSession | None = None
@@ -60,53 +69,57 @@ async def entrypoint(ctx: agents.JobContext):
             interim_results=True,
             api_key=DEEPGRAM_API_KEY,
         )
-        llm = google.LLM(model=GEMINI_MODEL, api_key=GEMINI_API_KEY)
+        # LLM with general-purpose + customer-support system prompt
+        llm = google.LLM(
+            model=GEMINI_MODEL,
+            api_key=GEMINI_API_KEY,
+            system_instruction=(
+                "ROLE: You are Aeroleads Agent, a voice-first AI that answers BOTH customer support "
+                "questions about Aeroleads and general questions (facts, how-tos, definitions, etc.).\n"
+                "STYLE: Short, clear, natural speech. Avoid jargon. No long lists; max 3 quick points if needed. "
+                "Prefer direct answers.\n"
+                "FACTS: For time-sensitive facts (leaders, prices, schedules, laws), say 'As of today' or include the current date. "
+                "If uncertain, say you’re not sure rather than inventing details.\n"
+                "BOUNDARIES: Don’t provide medical, legal, or financial advice; give general info and suggest consulting a professional. "
+                "Don’t collect sensitive data (passwords, full card numbers). "
+                "For Aeroleads inquiries, you may briefly describe offerings, pricing approach, or steps to get help.\n"
+                "INTERACTION: Be polite. Ask a brief clarifying question only if essential to avoid a wrong answer. "
+                "Otherwise, answer with best effort and keep it concise."
+            ),
+        )
         tts = deepgram.TTS(model=DEEPGRAM_TTS_MODEL, api_key=DEEPGRAM_API_KEY)
 
         session = AgentSession(
             stt=stt,
             llm=llm,
             tts=tts,
-            # Optional: better text sync for live displays (disable sync if you want ASAP text)
-            # use_tts_aligned_transcript=True,
+            # use_tts_aligned_transcript=True,  # enable if you want TTS-synced text
         )
 
         # --- Transcript listeners ---
-        # 1) Realtime user transcripts (PSTN side), both interim and final
         @session.on("user_input_transcribed")
         def _on_user_input_transcribed(ev: UserInputTranscribedEvent):
-            # ev.is_final tells you if this chunk is final
             print(f"[user STT] final={ev.is_final} lang={ev.language} text={ev.transcript}")
 
-        # 2) Every committed item in the conversation history (user + assistant)
         @session.on("conversation_item_added")
         def _on_conv_item(ev):
-            # ev.item.role in {"user","assistant"}, ev.item.content is list of text chunks, we can flatten
             role = getattr(ev.item, "role", "unknown")
             texts = []
             for c in getattr(ev.item, "content", []) or []:
-                # text content in .text, depending on SDK version; keep defensive
                 t = getattr(c, "text", None) or getattr(c, "value", None) or str(c)
                 if t:
                     texts.append(t)
             if texts:
                 print(f"[history] {role}: {' '.join(texts)}")
 
-        # Start session with transcription output enabled (default True). You can also set
-        # sync_transcription=False to emit text as soon as available rather than synced to TTS.
         await session.start(
-            room=ctx.room,  # pass the room object
+            room=ctx.room,
             agent=Assistant(),
-            room_output_options=RoomOutputOptions(
-                # transcription_enabled=True,  # default True
-                # text_enabled=True,          # default True
-                # sync_transcription=False,   # uncomment for ASAP text (not synced to TTS timing)
-            ),
+            room_output_options=RoomOutputOptions(),
         )
 
-        # Initial greeting so we also capture assistant side
-        await session.say("Hello! Thanks for picking up. How can I help you today?")
-        await session.generate_reply(instructions="Greet the caller briefly and offer help.")
+        await session.say("Hi, this is Aeroleads Agent. How can I help you today?")
+        await session.generate_reply(instructions="Greet the caller briefly and invite their question.")
 
         # keep alive until the call ends / job stops
         while True:
@@ -123,6 +136,7 @@ async def entrypoint(ctx: agents.JobContext):
                 await session.aclose()
             except Exception as e:
                 print("[agent] session close error:", e)
+
 
 if __name__ == "__main__":
     agents.cli.run_app(
