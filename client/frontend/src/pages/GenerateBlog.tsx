@@ -6,16 +6,11 @@ import {
   Box,
   TextField,
   Button,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   FormControlLabel,
   Checkbox,
   Alert,
   CircularProgress,
   Grid,
-  FormHelperText,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,7 +29,6 @@ interface BlogRequest {
 }
 
 interface GeneratePayload {
-  provider?: string;
   items: BlogRequest[];
 }
 
@@ -56,7 +50,6 @@ const GenerateBlog = () => {
     include_further_reading: true,
   });
   
-  const [provider, setProvider] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleChange = (field: keyof BlogRequest) => (
@@ -109,7 +102,6 @@ const GenerateBlog = () => {
       
       // Prepare the payload
       const payload: GeneratePayload = {
-        provider: provider || undefined,
         items: [
           {
             topic: formData.topic,
@@ -154,7 +146,6 @@ const GenerateBlog = () => {
         include_tldr: true,
         include_further_reading: true,
       });
-      setProvider('');
 
       // Redirect to the newly created blog if available, otherwise to blogs list
       if (data.created && data.created.length > 0 && data.created[0].meta?.slug) {
@@ -198,24 +189,6 @@ const GenerateBlog = () => {
 
         <form onSubmit={handleSubmit}>
           <Grid container spacing={3}>
-            {/* Provider Selection */}
-            <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>AI Provider (Optional)</InputLabel>
-                <Select
-                  value={provider}
-                  label="AI Provider (Optional)"
-                  onChange={(e) => setProvider(e.target.value)}
-                >
-                  <MenuItem value="">Default</MenuItem>
-                  <MenuItem value="gemini">Gemini</MenuItem>
-                  <MenuItem value="openai">OpenAI</MenuItem>
-                  <MenuItem value="perplexity">Perplexity</MenuItem>
-                </Select>
-                <FormHelperText>Select an AI provider or use the default</FormHelperText>
-              </FormControl>
-            </Grid>
-
             {/* Topic - Required */}
             <Grid item xs={12}>
               <TextField
